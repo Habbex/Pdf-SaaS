@@ -1,17 +1,19 @@
 "use client";
 import { uploadToS3 } from "@/lib/s3";
 import { useMutation } from "@tanstack/react-query";
-import axios from "axios";
 import { Inbox, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import React, { useState } from "react";
+import React from "react";
 import { useDropzone } from "react-dropzone";
-import toast from "react-hot-toast";
+import axios from "axios";
+import { toast } from "react-hot-toast";
+import { useRouter } from "next/navigation";
+
+// https://github.com/aws/aws-sdk-js-v3/issues/4126
 
 const FileUpload = () => {
   const router = useRouter();
-  const [uploading, setUploading] = useState(false);
-  const { mutate } = useMutation({
+  const [uploading, setUploading] = React.useState(false);
+  const { mutate, isLoading } = useMutation({
     mutationFn: async ({
       file_key,
       file_name,
@@ -19,7 +21,7 @@ const FileUpload = () => {
       file_key: string;
       file_name: string;
     }) => {
-      const response = await axios.post("api/create-chat", {
+      const response = await axios.post("/api/create-chat", {
         file_key,
         file_name,
       });
@@ -31,31 +33,33 @@ const FileUpload = () => {
     accept: { "application/pdf": [".pdf"] },
     maxFiles: 1,
     onDrop: async (acceptedFiles) => {
-      console.log(acceptedFiles);
       const file = acceptedFiles[0];
       if (file.size > 10 * 1024 * 1024) {
-        toast.error("please upload a smaller file than 10MB");
+        // bigger than 10mb!
+        toast.error("File too large");
         return;
       }
+
       try {
         setUploading(true);
         const data = await uploadToS3(file);
-        if (!data?.file_key || !data?.file_name) {
-          toast.error("something went wrong");
+        console.log("meow", data);
+        if (!data?.file_key || !data.file_name) {
+          toast.error("Something went wrong");
           return;
         }
         mutate(data, {
           onSuccess: ({ chat_id }) => {
-            toast.success("chat created");
+            toast.success("Chat created!");
             router.push(`/chat/${chat_id}`);
           },
-          onError: (error) => {
+          onError: (err) => {
             toast.error("Error creating chat");
-            console.error(error);
+            console.error(err);
           },
         });
       } catch (error) {
-        console.error(error);
+        console.log(error);
       } finally {
         setUploading(false);
       }
@@ -70,10 +74,13 @@ const FileUpload = () => {
         })}
       >
         <input {...getInputProps()} />
-        {uploading ? (
+        {uploading || isLoading ? (
           <>
+            {/* loading state */}
             <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />
-            <p className="mt-2 text-sm text-slate-400">Loading it to GPT...</p>
+            <p className="mt-2 text-sm text-slate-400">
+              Spilling Tea to GPT...
+            </p>
           </>
         ) : (
           <>
@@ -85,4 +92,5 @@ const FileUpload = () => {
     </div>
   );
 };
+
 export default FileUpload;
